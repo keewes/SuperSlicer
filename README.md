@@ -17,6 +17,13 @@ PrusaSlicer is based on [Slic3r](https://github.com/Slic3r/Slic3r) by Alessandro
 See the [wiki](https://github.com/supermerill/SuperSlicer/wiki) and
 the [documentation directory](doc/) for information about compilation.
 
+### Social networks
+
+When you encounter a bug, please open an issue in the `issues` tab.
+To join the discord server, in the `issues` tab, search "discord server".
+You can use the [slic3r subreddit](https://www.reddit.com/r/slic3r/).
+You can also ask questions in the `discussions` tab.
+
 ### What are SuperSlicer main features? main new features/differences?
 
 * Custom-made generated calibration tests.
