@@ -349,7 +349,7 @@ Point SeamPlacer::get_seam(const Layer& layer, SeamPosition seam_position,
                 Point nearest = polygon.point_projection(xy_lambda);
                 Vec3d polygon_3dpoint{ unscaled(nearest.x()), unscaled(nearest.y()), (double)layer.print_z };
                 double test_lambda_dist = (polygon_3dpoint - test_lambda_pos).norm();
-                double sphere_radius = po->model_object()->instances.front()->transform_bounding_box(v->mesh().bounding_box(), true).size().x() / 2;
+                double sphere_radius = po->model_object()->instance_bounding_box(0, true).size().x() / 2;
                 //if (test_lambda_dist > sphere_radius)
                 //    continue;
 
@@ -863,14 +863,14 @@ void SeamPlacer::apply_custom_seam(const Polygon& polygon, size_t po_idx,
 
 
 
-std::optional<Point> SeamHistory::get_last_seam(const PrintObject* po, size_t layer_id, const BoundingBox& island_bb)
+std::optional<Point> SeamHistory::get_last_seam(const PrintObject* po, coord_t layer_z, const BoundingBox& island_bb)
 {
-    assert(layer_id >= m_layer_id);
-    if (layer_id > m_layer_id) {
+    assert(layer_z >= m_layer_z);
+    if (layer_z > m_layer_z) {
         // Get seam was called for different layer than last time.
         m_data_last_layer = m_data_this_layer;
         m_data_this_layer.clear();
-        m_layer_id = layer_id;
+        m_layer_z = layer_z;
     }
 
 
@@ -918,7 +918,7 @@ void SeamHistory::add_seam(const PrintObject* po, const Point& pos, const Boundi
 
 void SeamHistory::clear()
 {
-    m_layer_id = 0;
+    m_layer_z = 0;
     m_data_last_layer.clear();
     m_data_this_layer.clear();
 }

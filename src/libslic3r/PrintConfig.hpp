@@ -468,8 +468,9 @@ public:
     /// callback to changed other settings that are linked (like width & spacing)
     /// </summary>
     /// <param name="opt_key">name of the changed option</param>
-    bool                value_changed(const t_config_option_key& opt_key, const std::vector<const DynamicPrintConfig*> config_collection);
-    bool                update_phony(const std::vector<const DynamicPrintConfig*> config_collection);
+    /// <return> configs that have at least a change</param>
+    std::set<const DynamicPrintConfig*> value_changed(const t_config_option_key& opt_key, const std::vector<DynamicPrintConfig*> config_collection);
+    std::set<const DynamicPrintConfig*> update_phony(const std::vector<DynamicPrintConfig*> config_collection);
 };
 
 class StaticPrintConfig : public StaticConfig
@@ -780,6 +781,7 @@ public:
     ConfigOptionBool                extra_perimeters;
     ConfigOptionBool                extra_perimeters_odd_layers;
     ConfigOptionBool                extra_perimeters_overhangs;
+    ConfigOptionBool                only_one_perimeter_first_layer;
     ConfigOptionBool                only_one_perimeter_top;
     ConfigOptionBool                only_one_perimeter_top_other_algo;
     ConfigOptionFloat               fill_angle;
@@ -897,6 +899,7 @@ protected:
         OPT_PTR(extra_perimeters);
         OPT_PTR(extra_perimeters_odd_layers);
         OPT_PTR(extra_perimeters_overhangs);
+        OPT_PTR(only_one_perimeter_first_layer);
         OPT_PTR(only_one_perimeter_top);
         OPT_PTR(only_one_perimeter_top_other_algo);
         OPT_PTR(fill_angle);
@@ -1094,7 +1097,7 @@ public:
     ConfigOptionEnum<GCodeFlavor>   gcode_flavor;
     ConfigOptionBool                gcode_label_objects;
     ConfigOptionInt                 gcode_precision_xyz;
-    ConfigOptionInts                gcode_precision_e;
+    ConfigOptionInt                 gcode_precision_e;
     ConfigOptionString              layer_gcode;
     ConfigOptionString              feature_gcode;
     ConfigOptionFloat               max_gcode_per_second;
@@ -1304,6 +1307,7 @@ public:
     ConfigOptionInts                fan_below_layer_time;
     ConfigOptionStrings             filament_colour;
     ConfigOptionStrings             filament_notes;
+    ConfigOptionPercents            filament_max_overlap;
     ConfigOptionPercents            filament_shrink;
     ConfigOptionFloatOrPercent      first_layer_acceleration;
     ConfigOptionInts                first_layer_bed_temperature;
@@ -1345,6 +1349,7 @@ public:
     ConfigOptionInt                 skirt_height;
     ConfigOptionFloatOrPercent      skirt_extrusion_width;
     ConfigOptionBool                draft_shield;
+    ConfigOptionFloatsOrPercents    seam_gap;
     ConfigOptionInt                 skirts;
     ConfigOptionInts                slowdown_below_layer_time;
     ConfigOptionBool                spiral_vase;
@@ -1405,6 +1410,7 @@ protected:
         OPT_PTR(fan_below_layer_time);
         OPT_PTR(filament_colour);
         OPT_PTR(filament_notes);
+        OPT_PTR(filament_max_overlap);
         OPT_PTR(filament_shrink);
         OPT_PTR(first_layer_acceleration);
         OPT_PTR(first_layer_bed_temperature);
@@ -1440,6 +1446,7 @@ protected:
         OPT_PTR(resolution);
         OPT_PTR(retract_before_travel);
         OPT_PTR(retract_layer_change);
+        OPT_PTR(seam_gap);
         OPT_PTR(skirt_brim);
         OPT_PTR(skirt_distance);
         OPT_PTR(skirt_distance_from_brim);

@@ -451,6 +451,7 @@ const std::vector<std::string>& Preset::print_options()
         "extra_perimeters",
         "extra_perimeters_odd_layers",
         "extra_perimeters_overhangs",
+        "only_one_perimeter_first_layer",
         "only_one_perimeter_top",
         "only_one_perimeter_top_other_algo",
         "ensure_vertical_shell_thickness", 
@@ -656,6 +657,7 @@ const std::vector<std::string>& Preset::filament_options()
         "extrusion_multiplier", "filament_density", "filament_cost", "filament_spool_weight", "filament_loading_speed", "filament_loading_speed_start", "filament_load_time",
         "filament_unloading_speed", "filament_toolchange_delay", "filament_unloading_speed_start", "filament_unload_time", "filament_cooling_moves",
         "filament_cooling_initial_speed", "filament_cooling_final_speed", "filament_ramming_parameters", "filament_minimal_purge_on_wipe_tower",
+        "filament_max_overlap",
         "filament_shrink",
         "filament_use_skinnydip",  // skinnydip params start
         "filament_use_fast_skinnydip",
@@ -686,7 +688,9 @@ const std::vector<std::string>& Preset::filament_options()
         "external_perimeter_fan_speed",
         // Retract overrides
         "filament_retract_length", "filament_retract_lift", "filament_retract_lift_above", "filament_retract_lift_below", "filament_retract_speed", "filament_deretract_speed", "filament_retract_restart_extra", "filament_retract_before_travel",
-        "filament_retract_layer_change", "filament_wipe", "filament_wipe_speed", "filament_wipe_extra_perimeter", "filament_retract_before_wipe", 
+        "filament_retract_layer_change", "filament_retract_before_wipe", 
+        "filament_seam_gap",
+        "filament_wipe", "filament_wipe_extra_perimeter", "filament_wipe_speed",
         // Profile compatibility
         "filament_vendor", "compatible_prints", "compatible_prints_condition", "compatible_printers", "compatible_printers_condition", "inherits"
         //merill adds
@@ -1463,6 +1467,7 @@ inline t_config_option_keys deep_diff(const ConfigBase &config_this, const Confi
                 case coFloats:  add_correct_opts_to_diff<ConfigOptionFloats     >(opt_key, diff, config_other, config_this);  break;
                 case coStrings: add_correct_opts_to_diff<ConfigOptionStrings    >(opt_key, diff, config_other, config_this);  break;
                 case coPercents:add_correct_opts_to_diff<ConfigOptionPercents   >(opt_key, diff, config_other, config_this);  break;
+                case coFloatsOrPercents:add_correct_opts_to_diff<ConfigOptionFloatsOrPercents>(opt_key, diff, config_other, config_this);  break;
                 case coPoints:  add_correct_opts_to_diff<ConfigOptionPoints     >(opt_key, diff, config_other, config_this);  break;
                 default:        diff.emplace_back(opt_key);     break;
                 }

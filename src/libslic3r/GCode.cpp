@@ -221,7 +221,8 @@ std::string Wipe::wipe(GCode& gcodegen, bool toolchange)
 //if first layer, ask for a bigger lift for travel to object, to be on the safe side
 static inline void set_extra_lift(const Layer& layer, const Print& print, GCodeWriter & writer, int extruder_id) {
     //if first layer, ask for a bigger lift for travel to object, to be on the safe side
-    if (layer.id() == 0 && print.config().retract_lift.get_at(extruder_id) != 0) {
+    if (layer.id() == 0 && 
+        (print.config().retract_lift.get_at(extruder_id) != 0 || print.config().retract_lift_first_layer.get_at(extruder_id))) {
         //get biggest first layer height and set extra lift for first travel, to be safe.
         double extra_lift_value = 0;
         for (const PrintObject* obj : print.objects())
@@ -512,7 +513,7 @@ std::vector<GCode::LayerToPrint> GCode::collect_layers_to_print(const PrintObjec
     //FIXME should we use the printing extruders instead?
     double gap_over_supports = object.config().support_material_contact_distance_top;
     // FIXME should we test object.config().support_material_synchronize_layers ? IN prusa code, the support layers are synchronized with object layers iff soluble supports.
-    assert(!object.config().support_material || gap_over_supports != 0. || object.config().support_material_synchronize_layers);
+    //assert(!object.config().support_material || gap_over_supports != 0. || object.config().support_material_synchronize_layers);
     if (gap_over_supports != 0.) {
         gap_over_supports = std::max(0., gap_over_supports);
         // Not a soluble support,
@@ -721,6 +722,8 @@ void GCode::do_export(Print* print, const char* path, GCodeProcessor::Result* re
 
     BOOST_LOG_TRIVIAL(info) << "Exporting G-code finished" << log_memory_info();
 	print->set_done(psGCodeExport);
+    //notify gui that the gcode is ready to be drawed
+    print->set_status(100, L("Gcode done"), PrintBase::SlicingStatus::FlagBits::GCODE_ENDED);
 
     // Write the profiler measurements to file
     PROFILE_UPDATE();
@@ -1215,19 +1218,20 @@ void GCode::_do_export(Print& print, FILE* file, ThumbnailsGeneratorCallback thu
             if (pos_dot != std::string::npos && pos_dot > 0)
                 object_name = object_name.substr(0, pos_dot);
             //get bounding box for the instance
-            BoundingBoxf3 raw_bbox = print_object->model_object()->raw_mesh_bounding_box();
-            BoundingBoxf3 m_bounding_box = print_instance.model_instance->transform_bounding_box(raw_bbox);
+            //BoundingBoxf3 raw_bbox = print_object->model_object()->raw_mesh_bounding_box();
+            //BoundingBoxf3 bounding_box;// = print_instance.model_instance->transform_bounding_box(raw_bbox);
+            BoundingBoxf3 bounding_box = print_object->model_object()->instance_bounding_box(*print_instance.model_instance, false);
             if (global_bounding_box.size().norm() == 0) {
-                global_bounding_box = m_bounding_box;
+                global_bounding_box = bounding_box;
             } else {
-                global_bounding_box.merge(m_bounding_box);
+                global_bounding_box.merge(bounding_box);
             }
             if (this->config().gcode_label_objects) {
                 _write_format(file, "; object:{\"name\":\"%s\",\"id\":\"%s id:%d copy %d\",\"object_center\":[%f,%f,%f],\"boundingbox_center\":[%f,%f,%f],\"boundingbox_size\":[%f,%f,%f]}\n",
                     object_name.c_str(), print_object->model_object()->name.c_str(), this->m_ordered_objects.size() - 1, copy_id,
-                    m_bounding_box.center().x(), m_bounding_box.center().y(), 0.,
-                    m_bounding_box.center().x(), m_bounding_box.center().y(), m_bounding_box.center().z(),
-                    m_bounding_box.size().x(), m_bounding_box.size().y(), m_bounding_box.size().z()
+                    bounding_box.center().x(), bounding_box.center().y(), 0.,
+                    bounding_box.center().x(), bounding_box.center().y(), bounding_box.center().z(),
+                    bounding_box.size().x(), bounding_box.size().y(), bounding_box.size().z()
                 );
             }
             copy_id++;
@@ -1464,6 +1468,9 @@ void GCode::_do_export(Print& print, FILE* file, ThumbnailsGeneratorCallback thu
         // the right tool should have been set by the user.
         m_writer.toolchange(initial_extruder_id);
     }
+
+    // ensure the first tool doesn't "extra_retract"
+    m_writer.unretract();
 
     //write temps after custom gcodes to ensure the temperature are good. (after tool selection)
     if ((initial_extruder_id != (uint16_t)-1) && !this->config().start_gcode_manual && print.config().first_layer_temperature.get_at(initial_extruder_id) != 0)
@@ -2867,9 +2874,9 @@ std::string GCode::extrude_loop_vase(const ExtrusionLoop &original_loop, const s
     // clip the path to avoid the extruder to get exactly on the first point of the loop;
     // if polyline was shorter than the clipping distance we'd get a null polyline, so
     // we discard it in that case
-    double clip_length = m_enable_loop_clipping ?
-        scale_(EXTRUDER_CONFIG_WITH_DEFAULT(nozzle_diameter,0)) * LOOP_CLIPPING_LENGTH_OVER_NOZZLE_DIAMETER :
-        0;
+    double clip_length = 0;
+    if (m_enable_loop_clipping && m_writer.tool_is_extruder())
+        clip_length = m_config.seam_gap.get_abs_value(m_writer.tool()->id(), scale_(EXTRUDER_CONFIG_WITH_DEFAULT(nozzle_diameter, 0)));
 
     // get paths
     ExtrusionPaths paths;
@@ -3184,9 +3191,9 @@ std::string GCode::extrude_loop(const ExtrusionLoop &original_loop, const std::s
     // clip the path to avoid the extruder to get exactly on the first point of the loop;
     // if polyline was shorter than the clipping distance we'd get a null polyline, so
     // we discard it in that case
-    double clip_length = m_enable_loop_clipping ? 
-        scale_(EXTRUDER_CONFIG_WITH_DEFAULT(nozzle_diameter,0)) * LOOP_CLIPPING_LENGTH_OVER_NOZZLE_DIAMETER :
-        0;
+    double clip_length = 0;
+    if (m_enable_loop_clipping && m_writer.tool_is_extruder())
+        clip_length = m_config.seam_gap.get_abs_value(m_writer.tool()->id(), scale_(EXTRUDER_CONFIG_WITH_DEFAULT(nozzle_diameter, 0)));
 
     // get paths
     ExtrusionPaths paths;
@@ -3857,10 +3864,10 @@ std::string GCode::_before_extrude(const ExtrusionPath &path, const std::string 
     std::string description{ description_in };
 
 
-    // adjust acceleration, inside the travel to set the deceleration
+    // adjust acceleration, inside the travel to set the deceleration (unless it's deactivated)
     double acceleration = get_default_acceleration(m_config);
     double travel_acceleration = m_writer.get_acceleration();
-    {
+    if(acceleration > 0){
         if (this->on_first_layer() && m_config.first_layer_acceleration.value > 0) {
             acceleration = m_config.first_layer_acceleration.get_abs_value(acceleration);
         } else if (m_config.perimeter_acceleration.value > 0 && is_perimeter(path.role())) {
@@ -4171,8 +4178,9 @@ std::string GCode::retract(bool toolchange)
     }
     if (need_lift)
         if (m_writer.tool()->retract_length() > 0 
-            || m_config.use_firmware_retraction 
+            || m_config.use_firmware_retraction
             || (!m_writer.tool_is_extruder() && m_writer.tool()->retract_lift() != 0)
+            || (BOOL_EXTRUDER_CONFIG(retract_lift_first_layer) && this->m_layer_index == 0)
             )
             gcode += m_writer.lift();
 
