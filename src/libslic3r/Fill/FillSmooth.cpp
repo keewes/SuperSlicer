@@ -46,7 +46,10 @@ namespace Slic3r {
         }
         else{
             Surface surfaceNoOverlap(srf_source);
-            for (const ExPolygon &poly : this->no_overlap_expolygons) {
+            //use half overlap instead of none.
+            ExPolygons half_overlap = offset_ex(this->no_overlap_expolygons, scale_(this->overlap / 2));
+            half_overlap = intersection_ex({ srf_source.expolygon }, half_overlap);
+            for (const ExPolygon &poly : half_overlap) {
                 if (poly.empty()) continue;
                 surfaceNoOverlap.expolygon = poly;
                 this->fill_expolygon(idx, *eec, surfaceNoOverlap, params_modifided, volume);
@@ -58,11 +61,12 @@ namespace Slic3r {
     }
     
     void FillSmooth::fill_expolygon(const int idx, ExtrusionEntityCollection &eec, const Surface &srf_to_fill, 
-        const FillParams &params, const double volume) const {
+        const FillParams &params_init, const double volume) const {
         
+        FillParams params = params_init;
         std::unique_ptr<Fill> f2 = std::unique_ptr<Fill>(Fill::new_from_type(fillPattern[idx]));
         f2->bounding_box = this->bounding_box;
-        f2->init_spacing(this->get_spacing(),params);
+        f2->init_spacing(this->get_spacing(), params);
         f2->layer_id = this->layer_id;
         f2->z = this->z;
         f2->angle = anglePass[idx] + this->angle;

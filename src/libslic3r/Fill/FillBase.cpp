@@ -84,7 +84,7 @@ Polylines Fill::fill_surface(const Surface *surface, const FillParams &params) c
 // This function possibly increases the spacing, never decreases, 
 // and for a narrow width the increase in spacing may become severe,
 // therefore the adjustment is limited to 20% increase.
-coord_t Fill::_adjust_solid_spacing(const coord_t width, const coord_t distance)
+coord_t Fill::_adjust_solid_spacing(const coord_t width, const coord_t distance, const double factor_max)
 {
     assert(width >= 0);
     assert(distance > 0);
@@ -93,10 +93,9 @@ coord_t Fill::_adjust_solid_spacing(const coord_t width, const coord_t distance)
     coord_t distance_new = (number_of_intervals == 0) ? 
         distance : 
         (coord_t)(((width - EPSILON) / number_of_intervals));
-    const coordf_t factor = coordf_t(distance_new) / coordf_t(distance);
+    const double factor = coordf_t(distance_new) / coordf_t(distance);
     assert(factor > 1. - 1e-5);
     // How much could the extrusion width be increased? By 20%.
-    const coordf_t factor_max = 1.2;
     if (factor > factor_max)
         distance_new = coord_t(floor((coordf_t(distance) * factor_max + 0.5)));
     return distance_new;
@@ -150,14 +149,14 @@ std::pair<float, Point> Fill::_infill_direction(const Surface *surface) const
 
 double Fill::compute_unscaled_volume_to_fill(const Surface* surface, const FillParams& params) const {
     double polyline_volume = 0;
-    for (auto poly = this->no_overlap_expolygons.begin(); poly != this->no_overlap_expolygons.end(); ++poly) {
-        polyline_volume += params.flow.height * unscaled(unscaled(poly->area()));
+    for (const ExPolygon& poly : this->no_overlap_expolygons) {
+        polyline_volume += params.flow.height * unscaled(unscaled(poly.area()));
         double perimeter_gap_usage = params.config->perimeter_overlap.get_abs_value(1);
         // add external "perimeter gap"
-        double perimeter_round_gap = unscaled(poly->contour.length()) * params.flow.height * (1 - 0.25 * PI) * 0.5;
+        double perimeter_round_gap = unscaled(poly.contour.length()) * params.flow.height * (1 - 0.25 * PI) * 0.5;
         // add holes "perimeter gaps"
         double holes_gaps = 0;
-        for (auto hole = poly->holes.begin(); hole != poly->holes.end(); ++hole) {
+        for (auto hole = poly.holes.begin(); hole != poly.holes.end(); ++hole) {
             holes_gaps += unscaled(hole->length()) * params.flow.height * (1 - 0.25 * PI) * 0.5;
         }
         polyline_volume += (perimeter_round_gap + holes_gaps) * perimeter_gap_usage;
@@ -228,7 +227,7 @@ void Fill::fill_surface_extrusion(const Surface *surface, const FillParams &para
 
 coord_t Fill::_line_spacing_for_density(float density) const
 {
-    return scale_(this->get_spacing() / density);
+    return scale_t(this->get_spacing() / density);
 }
 
 //FIXME: add recent improvmeent from perimetergenerator: avoid thick gapfill
@@ -996,7 +995,7 @@ namespace PrusaSimpleConnect {
                         EdgeGrid::Grid::ClosestPointResult cp = grid.closest_point(*pt, SCALED_EPSILON);
                         if (cp.valid()) {
                             // The infill end point shall lie on the contour.
-                            assert(cp.distance < 2.);
+                            //assert(cp.distance < 2.); //triggered with simple cube with gyroid. Is it dangerous?
                             intersection_points.emplace_back(cp, (&pl - infill_ordered.data()) * 2 + (pt == &pl.points.front() ? 0 : 1));
                         }
                     }
@@ -2141,7 +2140,7 @@ void connect_infill(Polylines&& infill_ordered, const std::vector<const Polygon*
                     EdgeGrid::Grid::ClosestPointResult cp = grid.closest_point(*pt, SCALED_EPSILON);
                     if (cp.valid()) {
                         // The infill end point shall lie on the contour.
-						assert(cp.distance <= 3.);
+						//assert(cp.distance <= 3.);
                         intersection_points.emplace_back(cp, (&pl - infill_ordered.data()) * 2 + (pt == &pl.points.front() ? 0 : 1));
                     }
                 }

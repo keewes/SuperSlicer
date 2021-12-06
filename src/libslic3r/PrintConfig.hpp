@@ -132,6 +132,13 @@ enum InfillConnection {
     icConnected, icHoles, icOuterShell, icNotConnected,
 };
 
+enum RemainingTimeType {
+    rtM117,
+    rtM73,
+    rtM73_Quiet,
+    rtNone,
+};
+
 enum SupportZDistanceType {
     zdFilament, zdPlane, zdNone,
 };
@@ -334,6 +341,16 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<InfillConnection>
     return keys_map;
 }
 
+template<> inline const t_config_enum_values& ConfigOptionEnum<RemainingTimeType>::get_enum_values() {
+    static const t_config_enum_values keys_map = {
+        { "m117", rtM117 },
+        { "m73", rtM73 },
+        { "m73q", rtM73_Quiet },
+        { "none", rtNone }
+    };
+    return keys_map;
+}
+
 template<> inline const t_config_enum_values& ConfigOptionEnum<SupportZDistanceType>::get_enum_values() {
     static const t_config_enum_values keys_map = {
         { "filament", zdFilament },
@@ -341,7 +358,7 @@ template<> inline const t_config_enum_values& ConfigOptionEnum<SupportZDistanceT
         { "none", zdNone }
     };
     return keys_map;
-} 
+}
 
 template<> inline const t_config_enum_values& ConfigOptionEnum<SLADisplayOrientation>::get_enum_values() {
     static const t_config_enum_values keys_map = {
@@ -389,6 +406,7 @@ public:
 
     static void handle_legacy(t_config_option_key& opt_key, std::string& value);
     static void to_prusa(t_config_option_key& opt_key, std::string& value, const DynamicConfig& all_conf);
+    static std::map<std::string, std::string> from_prusa(t_config_option_key& opt_key, std::string& value, const DynamicConfig& all_conf);
 
     // Array options growing with the number of extruders
     const std::vector<std::string>& extruder_option_keys() const { return m_extruder_option_keys; }
@@ -410,6 +428,8 @@ private:
     std::vector<std::string> 	m_extruder_retract_keys;
     std::vector<std::string> 	m_milling_option_keys;
 };
+
+
 
 // The one and only global definition of SLic3r configuration options.
 // This definition is constant.
@@ -463,6 +483,8 @@ public:
 
     void                to_prusa(t_config_option_key& opt_key, std::string& value) const override
         { PrintConfigDef::to_prusa(opt_key, value, *this); }
+    // utilities to help convert from prusa config.
+    void                convert_from_prusa();
 
     /// <summary>
     /// callback to changed other settings that are linked (like width & spacing)
@@ -760,6 +782,7 @@ public:
     ConfigOptionPercent             bridge_flow_ratio;
     ConfigOptionPercent             over_bridge_flow_ratio;
     ConfigOptionPercent             bridge_overlap;
+    ConfigOptionPercent             bridge_overlap_min;
     ConfigOptionEnum<InfillPattern> bottom_fill_pattern;
     ConfigOptionFloatOrPercent      bridged_infill_margin;
     ConfigOptionFloat               bridge_speed;
@@ -878,6 +901,7 @@ protected:
         OPT_PTR(bridge_flow_ratio);
         OPT_PTR(over_bridge_flow_ratio);
         OPT_PTR(bridge_overlap);
+        OPT_PTR(bridge_overlap_min);
         OPT_PTR(bottom_fill_pattern);
         OPT_PTR(bridged_infill_margin);
         OPT_PTR(bridge_speed);
@@ -1139,6 +1163,7 @@ public:
     ConfigOptionBool                high_current_on_filament_swap;
     ConfigOptionFloat               parking_pos_retraction;
     ConfigOptionBool                remaining_times;
+    ConfigOptionEnum<RemainingTimeType> remaining_times_type;
     ConfigOptionBool                silent_mode;
     ConfigOptionFloat               extra_loading_move;
     ConfigOptionBool                wipe_advanced;
@@ -1255,6 +1280,7 @@ protected:
         OPT_PTR(high_current_on_filament_swap);
         OPT_PTR(parking_pos_retraction);
         OPT_PTR(remaining_times);
+        OPT_PTR(remaining_times_type);
         OPT_PTR(silent_mode);
         OPT_PTR(extra_loading_move);
         OPT_PTR(wipe_advanced);
@@ -1306,6 +1332,7 @@ public:
     ConfigOptionBools               fan_always_on;
     ConfigOptionInts                fan_below_layer_time;
     ConfigOptionStrings             filament_colour;
+    ConfigOptionStrings             filament_custom_variables;
     ConfigOptionStrings             filament_notes;
     ConfigOptionPercents            filament_max_overlap;
     ConfigOptionPercents            filament_shrink;
@@ -1314,12 +1341,13 @@ public:
     ConfigOptionPercent             first_layer_flow_ratio;
     ConfigOptionFloatOrPercent      first_layer_speed;
     ConfigOptionFloatOrPercent      first_layer_infill_speed;
-    ConfigOptionFloatOrPercent      first_layer_min_speed;
+    ConfigOptionFloat               first_layer_min_speed;
     ConfigOptionInts                first_layer_temperature;
     ConfigOptionInts                full_fan_speed_layer;
     ConfigOptionFloatOrPercent      infill_acceleration;
+    ConfigOptionFloat               lift_min;
     ConfigOptionInts                max_fan_speed;
-    ConfigOptionFloats              max_layer_height;
+    ConfigOptionFloatsOrPercents    max_layer_height;
     ConfigOptionFloat               max_print_height;
     ConfigOptionPercents            max_speed_reduction;
     ConfigOptionFloats              milling_diameter;
@@ -1328,7 +1356,7 @@ public:
     //ConfigOptionPoints              milling_offset;
     //ConfigOptionFloats              milling_z_offset;
     ConfigOptionInts                min_fan_speed;
-    ConfigOptionFloats              min_layer_height;
+    ConfigOptionFloatsOrPercents    min_layer_height;
     ConfigOptionFloats              min_print_speed;
     ConfigOptionFloat               min_skirt_length;
     ConfigOptionString              notes;
@@ -1338,6 +1366,8 @@ public:
     ConfigOptionString              output_filename_format;
     ConfigOptionFloatOrPercent      perimeter_acceleration;
     ConfigOptionStrings             post_process;
+    ConfigOptionString              print_custom_variables;
+    ConfigOptionString              printer_custom_variables;
     ConfigOptionString              printer_model;
     ConfigOptionString              printer_notes;
     ConfigOptionFloat               resolution;
@@ -1359,6 +1389,7 @@ public:
     ConfigOptionPoints              thumbnails;
     ConfigOptionString              thumbnails_color;
     ConfigOptionBool                thumbnails_custom_color;
+    ConfigOptionBool                thumbnails_end_file;
     ConfigOptionBool                thumbnails_with_bed;
     ConfigOptionPercent             time_estimation_compensation;
     ConfigOptionInts                top_fan_speed;
@@ -1409,6 +1440,7 @@ protected:
         OPT_PTR(fan_always_on);
         OPT_PTR(fan_below_layer_time);
         OPT_PTR(filament_colour);
+        OPT_PTR(filament_custom_variables);
         OPT_PTR(filament_notes);
         OPT_PTR(filament_max_overlap);
         OPT_PTR(filament_shrink);
@@ -1421,6 +1453,7 @@ protected:
         OPT_PTR(first_layer_temperature);
         OPT_PTR(full_fan_speed_layer);
         OPT_PTR(infill_acceleration);
+        OPT_PTR(lift_min);
         OPT_PTR(max_fan_speed);
         OPT_PTR(max_layer_height);
         OPT_PTR(max_print_height);
@@ -1441,6 +1474,8 @@ protected:
         OPT_PTR(output_filename_format);
         OPT_PTR(perimeter_acceleration);
         OPT_PTR(post_process);
+        OPT_PTR(print_custom_variables);
+        OPT_PTR(printer_custom_variables);
         OPT_PTR(printer_model);
         OPT_PTR(printer_notes);
         OPT_PTR(resolution);
@@ -1462,6 +1497,7 @@ protected:
         OPT_PTR(thumbnails);
         OPT_PTR(thumbnails_color);
         OPT_PTR(thumbnails_custom_color);
+        OPT_PTR(thumbnails_end_file);
         OPT_PTR(thumbnails_with_bed);
         OPT_PTR(time_estimation_compensation);
         OPT_PTR(top_fan_speed);
@@ -1970,6 +2006,10 @@ public:
     // Not thread safe! Should not be called from other than the main thread!
     void                touch() { m_timestamp = ++ s_last_timestamp; }
 
+
+    // utilities to help convert from prusa config.
+    void convert_from_prusa(const DynamicPrintConfig& global_config);
+
 private:
     friend class cereal::access;
     template<class Archive> void serialize(Archive& ar) { ar(m_timestamp); ar(m_data); }
@@ -1979,6 +2019,8 @@ private:
 
     static uint64_t             s_last_timestamp;
 };
+
+
 
 } // namespace Slic3r
 
